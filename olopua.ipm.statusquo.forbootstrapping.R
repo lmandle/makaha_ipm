@@ -346,7 +346,7 @@ lambda.orig<-eigen.analysis(bigmat(400, pvec=p.vec))$lambda1 #you can change sit
 ### Bootstrap lambda (code adapted from Kuss et al. 2008)
 #########################################################
 
-n.boot=1000 #Kuss used 5000
+n.boot=10 #Kuss used 5000
 lambda.boot=data.frame(lambda=rep(NA,n.boot))#just want to collect lambdas
 
 for(b.samp in 1:n.boot){
@@ -391,8 +391,9 @@ for(b.samp in 1:n.boot){
   olopua.sdlg.s.boot<-data.frame(survival=sdlg.h$survival[sample.boot],
                                initial=sdlg.h$initial[sample.boot],
                                tag=sdlg.h$tag[sample.boot])
-  s4.h.boot<-update(s4.h, data=olopua.sdlg.s.boot)
-  s1s.boot<-fixef(s4.h.boot)
+  #s4.h.boot<-update(s4.h, data=olopua.sdlg.s.boot) #fitting problems depending on resampling, b/c of tag being a factor
+  s4.h.boot<-glm(survival~log(initial),family="binomial", data=olopua.sdlg.s.boot) #drop tag from random effect?
+  s1s.boot<-coef(s4.h.boot)
   
   #rebuild p.vec from bootstrapped params
   p.vec.boot<-array(0,c(3,ncoef,nstate))#state is adult or seedling
@@ -404,8 +405,8 @@ for(b.samp in 1:n.boot){
   p.vec.boot[3,1,1]<-f1.boot$cond[1]#intercept
   p.vec.boot[3,2,1]<-f1.boot$cond[2]#slope for fecundity for adults 
   p.vec.boot[3,3,1]<-f1.boot$cond[3]#quadratic term
-  p.vec.boot[1,1,2]<-s1s.boot$cond[1]#intercept
-  p.vec.boot[1,2,2]<-s1s.boot$cond[2]#slope for sdlg survival
+  p.vec.boot[1,1,2]<-s1s.boot[1]#intercept
+  p.vec.boot[1,2,2]<-s1s.boot[2]#slope for sdlg survival
   p.vec.boot[2,1,2]<-g1s.boot$cond[1]# intercept for growth for seedlings 
   p.vec.boot[2,2,2]<-g1s.boot$cond[2]#slope for growth for seedlings
   p.vec.boot[2,4,2]<-g.sig2s.boot
@@ -416,7 +417,14 @@ for(b.samp in 1:n.boot){
   p.vec.boot[3,8,1]<-log(3.2) #standard deviation size class distribution
   
   #bootstrapped lambda
-  lambda.boot$lambda[b.samp]<-eigen.analysis(bigmat(400, pvec=p.vec.boot))$lambda1
+  lambda.boot$lambda[b.samp]<-tryCatch(
+    expr=eigen.analysis(bigmat(400, pvec=p.vec.boot))$lambda1,
+    error=function(cond){
+      message(cond)
+      return(NA)},
+   warning=function(cond){
+     message(cond)
+     return(NULL)})
 }
 
 date = gsub(":","-",Sys.time()) #get date and time to append to filename  
