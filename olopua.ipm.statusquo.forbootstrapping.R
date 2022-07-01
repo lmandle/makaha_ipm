@@ -346,7 +346,7 @@ lambda.orig<-eigen.analysis(bigmat(400, pvec=p.vec))$lambda1 #you can change sit
 ### Bootstrap lambda (code adapted from Kuss et al. 2008)
 #########################################################
 
-n.boot=10 #Kuss used 5000
+n.boot=1100 #Kuss used 5000
 lambda.boot=data.frame(lambda=rep(NA,n.boot))#just want to collect lambdas
 
 for(b.samp in 1:n.boot){
@@ -374,17 +374,19 @@ for(b.samp in 1:n.boot){
   olopua.sdlg.g.boot<-data.frame(initial=sdlg.h$initial[sample.boot],
                             final=sdlg.h$final[sample.boot],
                             tag=sdlg.h$tag[sample.boot])
-  g3.sq.boot<-update(g3.sq, data=olopua.sdlg.g.boot)
-  g1s.boot<-fixef(g3.sq.boot)
-  g.sig2s.boot<-summary(g3.sq.boot)$sigma^2 	
+  #g3.sq.boot<-update(g3.sq, data=olopua.sdlg.g.boot)
+  g3.sq.boot<-glm(log(final)~log(initial), data=olopua.sdlg.g.boot) #remove individual-level random effect from bootstrapped model
+  g1s.boot<-coef(g3.sq.boot)
+  g.sig2s.boot<-summary(g3.sq.boot)$dispersion	
   
   #Fecundity
   sample.boot=c(sample(1:nrow(v.fec),replace=T))
   v.fec.boot<-data.frame(viable.fruit=v.fec$viable.fruit[sample.boot],
                             dbh=v.fec$dbh[sample.boot],
                             tree=v.fec$tree[sample.boot])
-  mod3e.boot<-update(mod3e, data=v.fec.boot)
-  f1.boot<-fixef(mod3e.boot)
+  #mod3e.boot<-update(mod3e, data=v.fec.boot)
+  mod3e.boot<-glm(log(viable.fruit)~log(dbh)+I(log(dbh)^2),data=v.fec.boot) #remove tree random eff for bootstrapping
+  f1.boot<-coef(mod3e.boot)
   
   #Seedling survival
   sample.boot=c(sample(1:nrow(sdlg.h),replace=T))
@@ -402,13 +404,13 @@ for(b.samp in 1:n.boot){
   p.vec.boot[2,1,1]<-g1a.boot$cond[1]#intercept for growth for adults  
   p.vec.boot[2,2,1]<-g1a.boot$cond[2]#slope for growth for adults 
   p.vec.boot[2,4,1]<-g.sig2a.boot#g.sigma2 overall variation
-  p.vec.boot[3,1,1]<-f1.boot$cond[1]#intercept
-  p.vec.boot[3,2,1]<-f1.boot$cond[2]#slope for fecundity for adults 
-  p.vec.boot[3,3,1]<-f1.boot$cond[3]#quadratic term
+  p.vec.boot[3,1,1]<-f1.boot[1]#intercept
+  p.vec.boot[3,2,1]<-f1.boot[2]#slope for fecundity for adults 
+  p.vec.boot[3,3,1]<-f1.boot[3]#quadratic term
   p.vec.boot[1,1,2]<-s1s.boot[1]#intercept
   p.vec.boot[1,2,2]<-s1s.boot[2]#slope for sdlg survival
-  p.vec.boot[2,1,2]<-g1s.boot$cond[1]# intercept for growth for seedlings 
-  p.vec.boot[2,2,2]<-g1s.boot$cond[2]#slope for growth for seedlings
+  p.vec.boot[2,1,2]<-g1s.boot[1]# intercept for growth for seedlings 
+  p.vec.boot[2,2,2]<-g1s.boot[2]#slope for growth for seedlings
   p.vec.boot[2,4,2]<-g.sig2s.boot
  
   #fixed
