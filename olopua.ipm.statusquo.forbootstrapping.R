@@ -1,6 +1,7 @@
 ############################################################################################
-########################### LAMA IPM ###############################################
-##status Quo restoration
+########################### OLOPUA IPM ###############################################
+
+###Status quo restoration
 
 rm(list=ls(all=TRUE)) ## Clear the workspace
 library(car)
@@ -11,75 +12,76 @@ library(popbio)
 library(gridBase)
 library(lattice)
 library(glmmTMB)
-library(MuMIn)
 library(ggplot2)
+
 
 ### Vital rate models *******************
 
 ##Adult survival:calculate from 2004-2017; does not vary w size
 
 ##For bootstrapping added file:
-lama.ad.surv<-read.table("lama_adult.survival.forbootstrapping.txt", header=T, sep="\t")
+olopua.ad.surv<-read.table("olopua_adult.survival.forbootstrapping.txt", header=T, sep="\t")
 
 #Calculated survival as: (nt/n0)1/t
-percent<-(sum(lama.ad.surv$alive.2017)/sum(lama.ad.surv$alive.2004))
-surv<-percent^(1/17)
+percent<-(sum(olopua.ad.surv$alive.2017)/sum(olopua.ad.surv$alive.2004))
+surv<-percent^(1/16.5)
 
 #calculate intercept
 surv.int<-log(surv/(1-surv))
 
-##Adult growth 
-lama.ag<-read.table("lama.adult.growth2.txt", header=T, sep="\t")
-lama.ag$Site<-as.factor(lama.ag$Site)
+#Adult growth final model
+olopua.ag<-read.table("olopua.adult.growth2.txt", header=T, sep="\t")
 
-mod1<-glmmTMB(log(final.size2)~log(initial.size)+(1|Site), data=lama.ag)
+mod1<-glmmTMB(log(final)~log(initial)+(1|Site), data=olopua.ag)
 summary(mod1)
 
 g1a<-fixef(mod1)
 
 g.sig2a<-summary(mod1)$sigma^2 		##overall variance
 
+#Seedling growth
+sdlg<-read.table("olopua.seedling.growth.txt", header=T, sep="\t")
 
-##Seedling growth
-lama.sg<-read.table("lama.seedling.growth.txt", header=T, sep="\t")
-str(lama.sg)
-lama.sg$year<-as.factor(lama.sg$year)
+str(sdlg)
+sdlg$site<-as.factor(sdlg$site)
+sdlg$year<-as.factor(sdlg$year)
+sdlg$tag<-as.factor(sdlg$tag)
+sdlg$yearsum<-as.factor(sdlg$yearsum)
 
-#This is status quo - using only yr 3 "1x1 plots and MG and assuming no
-#negative growth - no pigs)
+grow<-subset(sdlg, final>0)
 
-lama.sg3<-subset(lama.sg, year=="yr3")
-mod2a.3<-glmmTMB(log(final.c)~log(initial)+(1|year), data=lama.sg3)
-summary(mod2a.3)
+##Status quo, just using 2017-2020
+sdlg.h<-subset(sdlg,yearsum=="2017.2")
+sdlg.l<-subset(sdlg,yearsum=="2003.07")
 
-g1s<-fixef(mod2a.3)
+g3.sq<-glmmTMB(log(final)~log(initial)+(1|tag), data=sdlg.h)
+summary(g3.sq)
+g1s<-fixef(g3.sq)
+g.sig2s<-summary(g3.sq)$sigma^2 		##overall variance
 
-g.sig2s<-summary(mod2a.3)$sigma^2 		##overall variance
+
+#survival
+#This is later years (2017.20)- assume some weeding
+s4.h<-glmmTMB(survival~log(initial)+(1|tag),family="binomial", data=sdlg.h)
+summary(s4.h)# intercept model only is same AIC so we keep it.
+
+s1s<-fixef(s4.h)
 
 
 ##Fecundity
-lama.fec<-read.table("lama.fecundity2.txt", header=T, sep="\t")
-lama.fec$year<-as.factor(lama.fec$year)
+olopua.fec<-read.table("olopua.fecundity.txt", header=T, sep="\t")
+olopua.fec$tree<-as.factor(olopua.fec$tree)
+str(olopua.fec)
 
-mod3<-glmmTMB(log(fruit)~log(dbh) +(1|tag), data=lama.fec)
-summary(mod3)
+#Subset to those producing fruit
+v.fec<-subset(olopua.fec, viable.fruit>0)
+#t.fec<-subset(olopua.fec, fruit.plus40>0)
+#v.fec.40<-subset(olopua.fec, viable.fruit.plus.40>0)
 
-f1<-fixef(mod3)
-
-
-# Survival seedlings
-lama.surv<-read.table("lama.seedling.survival2.txt", header=T, sep="\t")
-str(lama.surv)
-
-lama.surv$tag<-as.factor(lama.surv$tag)
-lama.surv$year<-as.factor(lama.surv$year)
-
-#We use yrs 3 and4; high survival, we assume same w and w.out weeding
-lama.surv34<-subset(lama.surv,year=="yr3" | year=="yr4")
-mod4b<-glmmTMB(survival~log(size) +(1|year), family="binomial", data=lama.surv34)
-summary(mod4b)
-
-s1s<-fixef(mod4b)#model without size is same AIC so we keep it in.
+##This assume rat predation in canopy, count only viable fruit
+mod3e<-glmmTMB(log(viable.fruit)~log(dbh)+I(log(dbh)^2)+(1|tree),data=v.fec)
+summary(mod3e)
+f1<-fixef(mod3e)
 
 
 #######COEFFICIENTS###########################
@@ -94,7 +96,7 @@ p.vec[1,1,1]<-surv.int #intercept for survival for adults, slope is zero.
 
 #exp(x)/(1+exp(x))
 
-#GROWTH ADULTS
+#GROWTH ADULTS 
 p.vec[2,1,1]<-g1a$cond[1]#intercept for growth for adults  
 p.vec[2,2,1]<-g1a$cond[2]#slope for growth for adults 
 
@@ -102,25 +104,26 @@ p.vec[2,4,1]<-g.sig2a#g.sigma2 overall variation
 
 
 ##FECUNDITY
+#Each year 3/11 trees produced no fruit, =73% produced
+
 p.vec[3,1,1]<-f1$cond[1]#intercept
 p.vec[3,2,1]<-f1$cond[2]#slope for fecundity for adults 
+p.vec[3,3,1]<-f1$cond[3]#quadratic term
 
+#(1-prob ground pred)*%germ*%surv to 6 months
+#Status quo: 40% were predated across all cover trts since cover mean 20%
+p.vec[3,6,1]<-(1-0.4)*0.64*0.5#
 
-#status quo 
-p.vec[3,6,1]<-(1-0.89)*0.64*0.31#prob of pred*germ *survival open, whole, all cover
-
-
-##seedling size class distribution
-p.vec[3,7,1]<-log(5.4) #scd MEAN size class distribution
-p.vec[3,8,1]<-1.57 #standard deviation of log of size class distribution
+p.vec[3,7,1]<-log(7.6) #scd MEAN size class distribution
+p.vec[3,8,1]<-log(3.2) #standard deviation size class distribution
 
 #SURVIVAL OF SEEDLINGS
 p.vec[1,1,2]<-s1s$cond[1]#intercept
 p.vec[1,2,2]<-s1s$cond[2]#slope for sdlg survival
 
 #GROWTH SEEDLINGS
-p.vec[2,1,2]<- g1s$cond[1]# intercept for growth for seedlings 
-p.vec[2,2,2]<- g1s$cond[2]#slope for growth for seedlings
+p.vec[2,1,2]<-g1s$cond[1]# intercept for growth for seedlings 
+p.vec[2,2,2]<-g1s$cond[2]#slope for growth for seedlings
 
 p.vec[2,4,2]<-g.sig2s 
 
@@ -130,18 +133,19 @@ p.vec
 ## The IPM FUNCTIONS: s(x), g(y,x), f(y,x), p(y,x), K(y,x)####### 
 ####ADULTS
 ####A.- ADULT SURVIVAL function s(x)
+
+#we use < or >10,  since so few individuals 1-5cm dbh
 sx.adults<-function(x, pvec){
-  surv<-ifelse(x<log(5),0.996,1)#or 0.986 if 98%, this is at 99%
+  surv<-ifelse(x<log(10),0.998,1)# this is 0.982 mean vs 0.98 #olopua <10
   xbeta.adults<-pvec[1,1,1]+pvec[1,2,1]*x; #slope is 0
   s<-(exp(xbeta.adults)/(1+exp(xbeta.adults)))*surv
   return(s);
 }
 
 
-
 #check function with graph
-plot(sx.adults(seq(1,3.5,length.out=50), p.vec)~(seq(1,3.5,length.out=50)), type="l",col="black",lty=1,xlab="Adult size (log DBH)", ylab="Survival",ylim=c(0.8,1))
-#
+plot(sx.adults(seq(1,3.5,length.out=50), p.vec)~(seq(1,3.5,length.out=50)), type="l",col="blue",lty=1,xlab="Adult size (log DBH)", ylab="Survival",ylim=c(0,1))
+
 
 
 ### B. ADULT GROWTH function g(y,x) 
@@ -160,7 +164,7 @@ gx<-function(x, pvec, year) {
 }
 
 plot(gx(seq(0,3.2,length.out=50),p.vec)~(seq(0,3.2,length.out=50)), type="l",col="grey",lty=1,lwd=2,xlab="Adult size a t (log DBH)", ylab="Adult size at time (t+1)")
-points(log(lama.ag$initial.size), log(lama.ag$final.size), col="black",xlab="DBH at t (log)", ylab="DBH at t+1 (log)")
+points(log(olopua.ag$initial), log(olopua.ag$final), col="black",xlab="DBH at t (log)", ylab="DBH at t+1 (log)")
 #legend(2.6, 3.5, c("Year1", "Year2", "Year3"), bg="white", bty="n", lwd=c(3,3,3),lty=c(1,2,3))
 
 
@@ -173,32 +177,34 @@ pyx.adults<-function(y,x, pvec) {
 
 ###D.FERTILITY FUNCTION
 fyx.adults<-function(y, x, pvec) {
-  p.cap<-ifelse(x<0.7,0,1)#put in the function #same as log(2)
-  no.cap<-pvec[3,1,1] + pvec[3,2,1]*x;
-  surv<-pvec[3,6,1]
+  p.cap<-ifelse(x<0.7,0,0.73)#prob of fruiting is 73%
+  no.cap<-pvec[3,1,1] + pvec[3,2,1]*x+pvec[3,3,1]*I(x^2);
+  surv<-pvec[3,6,1]#this is viable*pred*germ*survival
   scd<-dnorm(y, pvec[3,7,1], pvec[3,8,1])
   f<-p.cap*no.cap*surv*scd    
+  
   
   return(f)
 }
 
 #check graph wrt fruit production
 fx<-function(x, pvec) {
-  p.cap<-ifelse(x<0.7,0,1)
-  no.cap<-pvec[3,1,1] + pvec[3,2,1]*x;
+  p.cap<-ifelse(x<0.7,0,0.8)
+  no.cap<-pvec[3,1,1] + pvec[3,2,1]*x+pvec[3,3,1]*I(x^2);
   f<-p.cap*no.cap
   return(f)
 }
 
-plot(fx(seq(1,3.2,length.out=50),p.vec)~(seq(1,3.2,length.out=50)), type="l",col="black",lty=1,xlab="Adult size (log DBH)", ylab="Log(Seeds produced)", ylim=c(4.5,8.5))
-points(log(lama.fec$dbh),log(lama.fec$fruit),type="p",lwd=1)
 
-#Check graph - this is mean number of seedlings produced
+plot(fx(seq(1,3.2,length.out=50),p.vec)~(seq(1,3.2,length.out=50)), type="l",col="blue",lty=1,xlab="Adult size (log DBH)", ylab="Log(Seeds produced)")
+points(log(fec$dbh),log(fec$fruit),type="p",lwd=1, col="blue")
+
+points.default()#Check graph - this is mean number of seedlings produced
 fx<-function(x, pvec) {
-  p.cap<-ifelse(x<0.7,0,1)
-  no.cap<-pvec[3,1,1] + pvec[3,2,1]*x;
+  p.cap<-ifelse(x<0.7,0,0.8)
+  no.cap<-pvec[3,1,1] + pvec[3,2,1]*x+pvec[3,3,1]*I(x^2);
   surv<-pvec[3,6,1]
-  f<-p.cap*no.cap*surv    #around 2 seedlings per adult
+  f<-p.cap*no.cap*surv    
   return(f)
 }
 
@@ -217,7 +223,7 @@ sx.seedlings<-function(x, pvec) {
 }
 
 plot(sx.seedlings(seq(0.6,5,length.out=50), p.vec)~(seq(0.6,5,length.out=50)), type="l",col="black",lty=1,xlab="Seedling size (log height)", ylab="Survival",ylim=c(0,1))
-points(log(lama.surv$size),lama.surv$survival,type="p",lwd=1)
+points(sx.seedlings(seq(0.6,5,length.out=50), p.vec)~(seq(0.6,5,length.out=50)), type="l",col="black",lty=1,xlab="Seedling size (log height)", ylab="Survival",ylim=c(0,1))
 
 
 ### B. SEEDLING GROWTH function g(y,x)
@@ -237,9 +243,8 @@ gx.s<-function(x, pvec) {
   return(mux)
 }
 
-plot(gx.s(seq(0.6,5,length.out=50),p.vec)~(seq(0.6,5,length.out=50)), type="l",col="grey",lty=1,lwd=2,xlab="Seedling size a t (log height)", ylab="Seedling size at time (t+1)")
-points(log(lama.sg$initial),log(lama.sg$final),col="black",xlab="Height at t (log)", ylab="Height at t+1 (log)")
-#legend(-2, 0.75, c("Year1", "Year2", "Year3"), bg="white", bty="n", lwd=c(3,3,3),lty=c(1,2,3))
+plot(gx.s(seq(0.6,5,length.out=50),p.vec)~(seq(0.6,5,length.out=50)), type="l",col="grey",lty=1,lwd=2,xlab="Adult size a t (log DBH)", ylab="Adult size at time (t+1)")
+points(log(grow$initial),log(grow$final),col="black",xlab="Height at t (log)", ylab="Height at t+1 (log)")
 
 
 ### C.SEEDLING SURVIVAL-GROWTH function P(y, x)
@@ -274,7 +279,7 @@ bigmat<-function(bigM, pvec){
   ad.max.size<-1.1*log(24)
   
   sd.min.size<-0.99*log(2) #seedlings are height
-  sd.max.size<-1.01*log(150) 
+  sd.max.size<-1.01*log(180) 
   
   h.adult=(ad.max.size-ad.min.size)/(bigM+1);#bins
   y.adult = (seq(ad.min.size, ad.max.size, length=bigM) + seq(ad.min.size + h.adult, 
@@ -316,11 +321,12 @@ bigmat<-function(bigM, pvec){
   full.matrix<-cbind(seedling_behavior,rbind(FD.sd[1:length(y.seedling[y.seedling<=sd.max.size]), 1:bigM],KD.adult))
   return(full.matrix);
   #return(grad)#to check if the colSum is working
+  
 }
 
 
-
 #########################Eigenvalues and eigenvectors analysis, sensitivity,...
+#library(popbio)
 #Plot lambda as a function of bigm
 # bigm<-c(500,600,700,800)
 # lam<-array(0, c(length(bigm)))
@@ -334,9 +340,7 @@ bigmat<-function(bigM, pvec){
 # plot(lam[]~bigm, type="l", col="blue")#lambda is decreasing, need to use larger matrix
 #use 800x800, but really 400x400 is sufficient
 
-lambda.orig<-eigen.analysis(bigmat(400, pvec=p.vec))$lambda1
-
-
+lambda.orig<-eigen.analysis(bigmat(400, pvec=p.vec))$lambda1 #you can change site and year to get the different values
 
 #########################################################
 ### Bootstrap lambda (code adapted from Kuss et al. 2008)
@@ -348,75 +352,76 @@ lambda.boot=data.frame(lambda=rep(NA,n.boot))#just want to collect lambdas
 for(b.samp in 1:n.boot){
   
   #Adult survival
-  sample.boot=c(sample(1:nrow(lama.ad.surv),replace=T)) #generate bootstrapped sample
-  percent.boot<-(sum(lama.ad.surv$alive.2017[sample.boot])/sum(lama.ad.surv$alive.2004[sample.boot])) #recalc with bootstrap sample
-  surv.boot<-percent.boot^(1/17)
+  sample.boot=c(sample(1:nrow(olopua.ad.surv),replace=T)) #generate bootstrapped sample
+  percent.boot<-(sum(olopua.ad.surv$alive.2017[sample.boot])/sum(olopua.ad.surv$alive.2004[sample.boot])) #recalc with bootstrap sample
+  surv.boot<-percent.boot^(1/16.5)
   if(surv.boot==1){ #add to avoid Inf problem when surv.boot is 1
     surv.boot=0.999
-    } 
+  } 
   surv.int.boot<-log(surv.boot/(1-surv.boot))
   
   #Adult growth
-  sample.boot=c(sample(1:nrow(lama.ag),replace=T)) #generate bootstrapped sample
-  lama.ag.boot<-data.frame(Site=lama.ag$Site[sample.boot], #create bootstrapped dataset
-                           initial.size=lama.ag$initial.size[sample.boot],
-                           final.size2=lama.ag$final.size2[sample.boot])
-  mod1.boot<-update(mod1, data=lama.ag.boot) #refit model
+  sample.boot=c(sample(1:nrow(olopua.ag),replace=T)) #generate bootstrapped sample
+  olopua.ag.boot<-data.frame(Site=olopua.ag$Site[sample.boot], #create bootstrapped dataset
+                           initial=olopua.ag$initial[sample.boot],
+                           final=olopua.ag$final[sample.boot])
+  mod1.boot<-update(mod1, data=olopua.ag.boot) #refit model
   g1a.boot<-fixef(mod1.boot)
   g.sig2a.boot<-summary(mod1.boot)$sigma^2 
   
   #Seedling growth
-  sample.boot=c(sample(1:nrow(lama.sg3),replace=T))
-  lama.sg3.boot<-data.frame(initial=lama.sg3$initial[sample.boot],
-                            final.c=lama.sg3$final.c[sample.boot],
-                            year=lama.sg3$year[sample.boot])
-  mod2a.3.boot<-update(mod2a.3, data=lama.sg3.boot)
-  g1s.boot<-fixef(mod2a.3.boot)
-  g.sig2s.boot<-summary(mod2a.3.boot)$sigma^2 	
+  sample.boot=c(sample(1:nrow(sdlg.h),replace=T))
+  olopua.sdlg.g.boot<-data.frame(initial=sdlg.h$initial[sample.boot],
+                            final=sdlg.h$final[sample.boot],
+                            tag=sdlg.h$tag[sample.boot])
+  g3.sq.boot<-update(g3.sq, data=olopua.sdlg.g.boot)
+  g1s.boot<-fixef(g3.sq.boot)
+  g.sig2s.boot<-summary(g3.sq.boot)$sigma^2 	
   
   #Fecundity
-  sample.boot=c(sample(1:nrow(lama.fec),replace=T))
-  lama.fec.boot<-data.frame(fruit=lama.fec$fruit[sample.boot],
-                            dbh=lama.fec$dbh[sample.boot],
-                            tag=lama.fec$tag[sample.boot])
-  mod3.boot<-update(mod3, data=lama.fec.boot)
-  f1.boot<-fixef(mod3.boot)
-
+  sample.boot=c(sample(1:nrow(v.fec),replace=T))
+  v.fec.boot<-data.frame(viable.fruit=v.fec$viable.fruit[sample.boot],
+                            dbh=v.fec$dbh[sample.boot],
+                            tree=v.fec$tree[sample.boot])
+  mod3e.boot<-update(mod3e, data=v.fec.boot)
+  f1.boot<-fixef(mod3e.boot)
+  
   #Seedling survival
-  sample.boot=c(sample(1:nrow(lama.surv34),replace=T))
-  lama.surv34.boot<-data.frame(survival=lama.surv34$survival[sample.boot],
-                               size=lama.surv34$size[sample.boot],
-                              year=lama.surv34$year[sample.boot])
-  mod4b.boot<-update(mod4b, data=lama.surv34.boot)
-  s1s.boot<-fixef(mod4b.boot)
+  sample.boot=c(sample(1:nrow(sdlg.h),replace=T))
+  olopua.sdlg.s.boot<-data.frame(survival=sdlg.h$survival[sample.boot],
+                               initial=sdlg.h$initial[sample.boot],
+                               tag=sdlg.h$tag[sample.boot])
+  s4.h.boot<-update(s4.h, data=olopua.sdlg.s.boot)
+  s1s.boot<-fixef(s4.h.boot)
   
   #rebuild p.vec from bootstrapped params
   p.vec.boot<-array(0,c(3,ncoef,nstate))#state is adult or seedling
   
-  p.vec.boot[1,1,1]<-surv.int.boot
+  p.vec.boot[1,1,1]<-surv.int.boot #intercept for survival for adults, slope is zero. 
   p.vec.boot[2,1,1]<-g1a.boot$cond[1]#intercept for growth for adults  
   p.vec.boot[2,2,1]<-g1a.boot$cond[2]#slope for growth for adults 
   p.vec.boot[2,4,1]<-g.sig2a.boot#g.sigma2 overall variation
   p.vec.boot[3,1,1]<-f1.boot$cond[1]#intercept
   p.vec.boot[3,2,1]<-f1.boot$cond[2]#slope for fecundity for adults 
+  p.vec.boot[3,3,1]<-f1.boot$cond[3]#quadratic term
   p.vec.boot[1,1,2]<-s1s.boot$cond[1]#intercept
   p.vec.boot[1,2,2]<-s1s.boot$cond[2]#slope for sdlg survival
-  p.vec.boot[2,1,2]<- g1s.boot$cond[1]# intercept for growth for seedlings 
-  p.vec.boot[2,2,2]<- g1s.boot$cond[2]#slope for growth for seedlings
-  p.vec.boot[2,4,2]<-g.sig2s.boot 
+  p.vec.boot[2,1,2]<-g1s.boot$cond[1]# intercept for growth for seedlings 
+  p.vec.boot[2,2,2]<-g1s.boot$cond[2]#slope for growth for seedlings
+  p.vec.boot[2,4,2]<-g.sig2s.boot
+ 
+  #fixed
+  p.vec.boot[3,6,1]<-(1-0.4)*0.64*0.5 #(1-prob ground pred)*%germ*%surv to 6 months
+  p.vec.boot[3,7,1]<-log(7.6) #scd MEAN size class distribution
+  p.vec.boot[3,8,1]<-log(3.2) #standard deviation size class distribution
   
-  #fixed params:
-  p.vec.boot[3,6,1]<-(1-0.89)*0.64*0.31#prob of pred*germ *survival open, whole, all cover
-  p.vec.boot[3,7,1]<-log(5.4) #scd MEAN size class distribution
-  p.vec.boot[3,8,1]<-1.57 #standard deviation of log of size class distribution
-  
-
+  #bootstrapped lambda
   lambda.boot$lambda[b.samp]<-eigen.analysis(bigmat(400, pvec=p.vec.boot))$lambda1
 }
 
 date = gsub(":","-",Sys.time()) #get date and time to append to filename  
 date = gsub(" ","_",date)
-write.csv(lambda.boot, file=paste0("lama.lambda.boot", "_", date, ".csv"))
+write.csv(lambda.boot, file=paste0("olopua.lambda.boot", "_", date, ".csv"))
 
 ci.normal.app=c(mean(lambda.boot$lambda)-1.96*sd(lambda.boot$lambda),mean(lambda.boot$lambda)+1.96*sd(lambda.boot$lambda))
 res=c(mean(lambda.boot$lambda,na.rm=T),quantile(lambda.boot$lambda,p=c(0.025,0.5,0.975),na.rm=T),ci.normal.app)
@@ -428,3 +433,4 @@ ggplot(data=lambda.boot, aes(lambda))+
   geom_vline(xintercept=quantile(lambda.boot$lambda,p=0.025,na.rm=T), color="red")+
   geom_vline(xintercept=quantile(lambda.boot$lambda,p=0.975,na.rm=T), color="red")+
   geom_vline(xintercept=lambda.orig, color="green")
+
