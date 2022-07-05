@@ -410,8 +410,15 @@ for(b.samp in 1:n.boot){
   p.vec.boot[3,7,1]<-log(5.4) #scd MEAN size class distribution
   p.vec.boot[3,8,1]<-1.57 #standard deviation of log of size class distribution
   
-
-  lambda.boot$lambda[b.samp]<-eigen.analysis(bigmat(400, pvec=p.vec.boot))$lambda1
+  #bootstrapped lambda
+  lambda.boot$lambda[b.samp]<-tryCatch(
+    expr=eigen.analysis(bigmat(400, pvec=p.vec.boot))$lambda1,
+    error=function(cond){
+      message(cond)
+      return(NA)},
+    warning=function(cond){
+      message(cond)
+      return(NULL)})
 }
 
 date = gsub(":","-",Sys.time()) #get date and time to append to filename  
