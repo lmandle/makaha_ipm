@@ -370,7 +370,11 @@ for(b.samp in 1:n.boot){
   g.sig2a.boot<-summary(mod1.boot)$sigma^2 
   
   #Seedling growth
-  sample.boot=c(sample(1:nrow(sdlg.h),replace=T))
+  sdlg.h.subset<-data.frame(initial=sdlg.h$initial,
+                            final=sdlg.h$final,
+                            tag=sdlg.h$tag)
+  sdlg.h.subset<- sdlg.h.subset[complete.cases(sdlg.h.subset),] #remove 3 rows with NA for final b/c didn't survive
+  sample.boot=c(sample(1:nrow(sdlg.h.subset),replace=T))
   olopua.sdlg.g.boot<-data.frame(initial=sdlg.h$initial[sample.boot],
                             final=sdlg.h$final[sample.boot],
                             tag=sdlg.h$tag[sample.boot])
