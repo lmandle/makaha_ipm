@@ -346,8 +346,9 @@ lambda.orig<-eigen.analysis(bigmat(400, pvec=p.vec))$lambda1 #you can change sit
 ### Bootstrap lambda (code adapted from Kuss et al. 2008)
 #########################################################
 
-n.boot=1100 #Kuss used 5000
+n.boot=50 #Kuss used 5000
 lambda.boot=data.frame(lambda=rep(NA,n.boot))#just want to collect lambdas
+p.vec.boot<-array(0,c(n.boot,3,ncoef,nstate))#save p.vecs, state is adult or seedling
 
 for(b.samp in 1:n.boot){
   
@@ -402,29 +403,28 @@ for(b.samp in 1:n.boot){
   s1s.boot<-coef(s4.h.boot)
   
   #rebuild p.vec from bootstrapped params
-  p.vec.boot<-array(0,c(3,ncoef,nstate))#state is adult or seedling
-  
-  p.vec.boot[1,1,1]<-surv.int.boot #intercept for survival for adults, slope is zero. 
-  p.vec.boot[2,1,1]<-g1a.boot$cond[1]#intercept for growth for adults  
-  p.vec.boot[2,2,1]<-g1a.boot$cond[2]#slope for growth for adults 
-  p.vec.boot[2,4,1]<-g.sig2a.boot#g.sigma2 overall variation
-  p.vec.boot[3,1,1]<-f1.boot[1]#intercept
-  p.vec.boot[3,2,1]<-f1.boot[2]#slope for fecundity for adults 
-  p.vec.boot[3,3,1]<-f1.boot[3]#quadratic term
-  p.vec.boot[1,1,2]<-s1s.boot[1]#intercept
-  p.vec.boot[1,2,2]<-s1s.boot[2]#slope for sdlg survival
-  p.vec.boot[2,1,2]<-g1s.boot[1]# intercept for growth for seedlings 
-  p.vec.boot[2,2,2]<-g1s.boot[2]#slope for growth for seedlings
-  p.vec.boot[2,4,2]<-g.sig2s.boot
+
+  p.vec.boot[b.samp,1,1,1]<-surv.int.boot #intercept for survival for adults, slope is zero. 
+  p.vec.boot[b.samp,2,1,1]<-g1a.boot$cond[1]#intercept for growth for adults  
+  p.vec.boot[b.samp,2,2,1]<-g1a.boot$cond[2]#slope for growth for adults 
+  p.vec.boot[b.samp,2,4,1]<-g.sig2a.boot#g.sigma2 overall variation
+  p.vec.boot[b.samp,3,1,1]<-f1.boot[1]#intercept for fecundity for adults
+  p.vec.boot[b.samp,3,2,1]<-f1.boot[2]#slope for fecundity for adults 
+  p.vec.boot[b.samp,3,3,1]<-f1.boot[3]#quadratic term
+  p.vec.boot[b.samp,1,1,2]<-s1s.boot[1]#intercept
+  p.vec.boot[b.samp,1,2,2]<-s1s.boot[2]#slope for sdlg survival
+  p.vec.boot[b.samp,2,1,2]<-g1s.boot[1]# intercept for growth for seedlings 
+  p.vec.boot[b.samp,2,2,2]<-g1s.boot[2]#slope for growth for seedlings
+  p.vec.boot[b.samp,2,4,2]<-g.sig2s.boot
  
   #fixed
-  p.vec.boot[3,6,1]<-(1-0.4)*0.64*0.5 #(1-prob ground pred)*%germ*%surv to 6 months
-  p.vec.boot[3,7,1]<-log(7.6) #scd MEAN size class distribution
-  p.vec.boot[3,8,1]<-log(3.2) #standard deviation size class distribution
+  p.vec.boot[b.samp,3,6,1]<-(1-0.4)*0.64*0.5 #(1-prob ground pred)*%germ*%surv to 6 months
+  p.vec.boot[b.samp,3,7,1]<-log(7.6) #scd MEAN size class distribution
+  p.vec.boot[b.samp,3,8,1]<-log(3.2) #standard deviation size class distribution
   
   #bootstrapped lambda
   lambda.boot$lambda[b.samp]<-tryCatch(
-    expr=eigen.analysis(bigmat(400, pvec=p.vec.boot))$lambda1,
+    expr=eigen.analysis(bigmat(400, pvec=p.vec.boot[b.samp,,,]))$lambda1,
     error=function(cond){
       message(cond)
       return(NA)},
