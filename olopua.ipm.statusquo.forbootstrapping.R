@@ -346,8 +346,8 @@ lambda.orig<-eigen.analysis(bigmat(400, pvec=p.vec))$lambda1 #you can change sit
 ### Bootstrap lambda (code adapted from Kuss et al. 2008)
 #########################################################
 
-n.boot=50 #Kuss used 5000
-lambda.boot=data.frame(lambda=rep(NA,n.boot))#just want to collect lambdas
+n.boot=1100 #Kuss used 5000
+lambda.boot=data.frame(lambda=rep(NA,n.boot))#collect lambdas
 p.vec.boot<-array(0,c(n.boot,3,ncoef,nstate))#save p.vecs, state is adult or seedling
 
 for(b.samp in 1:n.boot){

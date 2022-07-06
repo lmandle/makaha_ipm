@@ -19,7 +19,7 @@ library(ggplot2)
 #No variation with size. Across sites, over 13-17 years we get a consistent 0.03 annual mortality.
 
 ##For bootstrapping added file:
-alahee.ad.surv<-read.table("C:/Users/Tamara Ticktin/Dropbox/Makaha files/IPM/alahee_adult.survival.forbootstrapping.txt", header=T, sep="\t")
+alahee.ad.surv<-read.table("alahee_adult.survival.forbootstrapping.txt", header=T, sep="\t")
 
 #Calculated survival as: (nt/n0)1/t
 percent<-(sum(alahee.ad.surv$alive.2017)/sum(alahee.ad.surv$alive.2004))
@@ -30,7 +30,7 @@ surv.int<-log(surv/(1-surv))
 surv.int
 
 #####Adult growth
-a.grow<-read.table("C:/Users/Tamara Ticktin/Dropbox/Makaha files/ipm/alahee.growth.txt", header=T, sep="\t")
+a.grow<-read.table("alahee.growth.txt", header=T, sep="\t")
 a.grow$plot<-as.factor(a.grow$plot)
 a.grow$treatment<-as.factor(a.grow$treatment)
 a.grow$tag<-as.factor(a.grow$tag)
@@ -48,7 +48,7 @@ g1a<-fixef(mod.g1)
 g.sig2a<-summary(mod.g1)$sigma^2 		##overall variance
 
 ###Seedling growth
-alahee.sd<-read.table("C:/Users/Tamara Ticktin/Dropbox/Makaha files/ipm/alahee.sldg.txt", header=T, sep="\t")
+alahee.sd<-read.table("alahee.sldg.txt", header=T, sep="\t")
 str(alahee.sd)
 alahee.sd$site<-as.factor(alahee.sd$site)
 alahee.sg<-subset(alahee.sd, final.year>0)
@@ -72,7 +72,7 @@ s1s<-fixef(mod1a)
 
 
 ##clonal survival and clonal growth
-alahee.cl<-read.table("C:/Users/Tamara Ticktin/Dropbox/Makaha files/ipm/alahee.clonal.txt", header=T, sep="\t")
+alahee.cl<-read.table("alahee.clonal.txt", header=T, sep="\t")
 str(alahee.cl)
 alahee.cl$tag<-as.factor(alahee.cl$tag)
 alahee.cl$year<-as.factor(alahee.cl$year)
@@ -98,7 +98,7 @@ s1c<-fixef(mod5)
 
 
 ##Fecundity
-alahee.fec<-read.table("C:/Users/Tamara Ticktin/Dropbox/Makaha files/ipm/alahee.fecundity2.txt", header=T, sep="\t")
+alahee.fec<-read.table("alahee.fecundity2.txt", header=T, sep="\t")
 str(alahee.fec)
 alahee.fec$tree<-as.factor(alahee.fec$tree)
 alahee.fec$year<-as.factor(alahee.fec$year)
@@ -407,5 +407,132 @@ bigmat<-function(bigM, pvec){
 #use 800x800, but really 400x400 is sufficient
 
 
-eigen.analysis(bigmat(400, pvec=p.vec))$lambda1 #you can change site and year to get the different values
+lambda.orig<-eigen.analysis(bigmat(400, pvec=p.vec))$lambda1 #you can change site and year to get the different values
 
+#########################################################
+### Bootstrap lambda (code adapted from Kuss et al. 2008)
+#########################################################
+
+n.boot=50 #Kuss used 5000
+lambda.boot=data.frame(lambda=rep(NA,n.boot))#collect lambdas
+p.vec.boot<-array(0,c(n.boot,4,ncoef,nstate))#save p.vecs, state is adult or seedling
+
+for(b.samp in 1:n.boot){
+  
+  #Adult survival
+  sample.boot=c(sample(1:nrow(alahee.ad.surv),replace=T)) #generate bootstrapped sample
+  percent.boot<-(sum(alahee.ad.surv$alive.2017[sample.boot])/sum(alahee.ad.surv$alive.2004[sample.boot]))
+  surv.boot<-percent.boot^(1/12.5)
+  if(surv.boot==1){ #add to avoid Inf problem when surv.boot is 1
+    surv.boot=0.999
+  } 
+  surv.int.boot<-log(surv.boot/(1-surv.boot))
+  surv.int.boot
+
+  #Adult growth
+  sample.boot=c(sample(1:nrow(a.grow),replace=T)) #generate bootstrapped sample
+  alahee.ag.boot<-data.frame(site=a.grow$site[sample.boot], #create bootstrapped dataset
+                             plot=a.grow$plot[sample.boot], 
+                             initial=a.grow$initial[sample.boot],
+                             final.year=a.grow$final[sample.boot])
+  mod.g1.boot<-update(mod.g1, data=alahee.ag.boot) #refit model 
+  g1a.boot<-fixef(mod.g1.boot)
+  g.sig2a.boot<-summary(mod.g1.boot)$sigma^2 
+
+  
+  #Seedling growth
+  sample.boot=c(sample(1:nrow(alahee.sg),replace=T))
+  alahee.sdlg.g.boot<-data.frame(initial=alahee.sg$initial[sample.boot],
+                                 final.year=alahee.sg$final.year[sample.boot],
+                                 site=alahee.sg$site[sample.boot])
+  g2s.boot<-update(g2s, data=alahee.sdlg.g.boot)
+  g1s.boot<-fixef(g2s.boot)
+  g.sig2s.boot<-summary(g2s.boot)$sigma^2 
+
+  
+  #Fecundity
+  sample.boot=c(sample(1:nrow(fec),replace=T))
+  fec.boot<-data.frame(fruit=fec$fruit[sample.boot],
+                         dbh=fec$dbh[sample.boot],
+                         tree=fec$tree[sample.boot])
+  mod3b.boot<-glm(log(fruit)~log(dbh),data=fec.boot)#refit without individual-level random effects
+  f1.boot<-coef(mod3b.boot)
+  
+  #Seedling survival
+  sample.boot=c(sample(1:nrow(alahee.s),replace=T))
+  alahee.sdlg.s.boot<-data.frame(survival=alahee.s$survival[sample.boot],
+                                 initial=alahee.s$initial[sample.boot],
+                                 site=alahee.s$site[sample.boot])
+  mod1a.boot<-update(mod1a, data=alahee.sdlg.s.boot)
+  s1s.boot<-fixef(mod1a.boot)
+
+  #Clonal growth
+  sample.boot=c(sample(1:nrow(alahee.cl),replace=T))
+  alahee.cg.boot<-data.frame(initial=alahee.cl$initial[sample.boot],
+                                 final=alahee.cl$final[sample.boot],
+                                 tag=alahee.cl$tag[sample.boot])
+  g2c.boot<-glm(log(final)~log(initial), data=alahee.cg.boot)
+  g1c.boot<-coef(g2c.boot)
+  g.sig2c.boot<-summary(g2c.boot)$dispersion
+  
+  #Clonal survival
+  sample.boot=c(sample(1:nrow(alahee.cl.s),replace=T))
+  alahee.sg.boot<-data.frame(initial=alahee.cl.s$initial[sample.boot],
+                             year=alahee.cl.s$year[sample.boot],
+                             survival=alahee.cl.s$survival[sample.boot])
+  mod5.boot<-update(mod5, data=alahee.sg.boot) #will get false convergence warning when 100% survival
+  s1c.boot<-fixef(mod5.boot)
+  
+  #rebuild p.vec from bootstrapped params
+  p.vec.boot[b.samp,1,1,1]<-surv.int.boot #intercept for survival for sizes >1 (97%), slope is zero. 
+  p.vec.boot[b.samp,2,1,1]<-g1a.boot$cond[1]#intercept for growth for adults  
+  p.vec.boot[b.samp,2,2,1]<-g1a.boot$cond[2]#slope for growth for adults 
+  p.vec.boot[b.samp,2,4,1]<-g.sig2a.boot#g.sigma2 overall variation
+  p.vec.boot[b.samp,3,1,1]<-f1.boot[1]#intercept
+  p.vec.boot[b.samp,3,2,1]<-f1.boot[2]#slope for fecundity for adults 
+  p.vec.boot[b.samp,1,1,2]<-s1s.boot$cond[1]#intercept
+  p.vec.boot[b.samp,1,2,2]<-s1s.boot$cond[2]##slope for sdlg survival
+  p.vec.boot[b.samp,1,1,3]<-s1c.boot$cond[1]#intercept clones
+  p.vec.boot[b.samp,1,2,3]<-s1c.boot$cond[2]##slope for clones survival
+  p.vec.boot[b.samp,2,1,2]<-g1s.boot$cond[1]# intercept for growth for seedlings 
+  p.vec.boot[b.samp,2,2,2]<-g1s.boot$cond[2]#slope for growth for seedlings
+  p.vec.boot[b.samp,2,4,2]<-g.sig2s.boot 
+  p.vec.boot[b.samp,2,1,3]<-g1c.boot[1]# intercept for growth for clones 
+  p.vec.boot[b.samp,2,2,3]<-g1c.boot[2]#slope for growth for clones
+  p.vec.boot[b.samp,2,4,3]<-g.sig2c.boot
+  
+  #fixed parameters
+  p.vec.boot[b.samp,3,6,1]<-(1)*(1-0.89)*0.4*0.24#average
+  p.vec.boot[b.samp,3,7,1]<-log(4) #scd MEAN size class distribution
+  p.vec.boot[b.samp,3,8,1]<-log(2) #standard deviation size class distribution
+  p.vec.boot[b.samp,4,1,1]<-1 #number of clones/tree
+  p.vec.boot[b.samp,4,2,1]<-0 #doesn't vary w size
+  p.vec.boot[b.samp,4,7,1]<-log(25.5) #scd MEAN size class distribution
+  p.vec.boot[b.samp,4,8,1]<-log(2.5) #standard deviation size class distribution
+  
+ 
+  #bootstrapped lambda
+  lambda.boot$lambda[b.samp]<-tryCatch(
+    expr=eigen.analysis(bigmat(400, pvec=p.vec.boot[b.samp,,,]))$lambda1,
+    error=function(cond){
+      message(cond)
+      return(NA)},
+    warning=function(cond){
+      message(cond)
+      return(NULL)})
+}
+
+date = gsub(":","-",Sys.time()) #get date and time to append to filename  
+date = gsub(" ","_",date)
+write.csv(lambda.boot, file=paste0("olopua.lambda.boot", "_", date, ".csv"))
+
+ci.normal.app=c(mean(lambda.boot$lambda)-1.96*sd(lambda.boot$lambda),mean(lambda.boot$lambda)+1.96*sd(lambda.boot$lambda))
+res=c(mean(lambda.boot$lambda,na.rm=T),quantile(lambda.boot$lambda,p=c(0.025,0.5,0.975),na.rm=T),ci.normal.app)
+
+ggplot(data=lambda.boot, aes(lambda))+  
+  geom_histogram(bins=50)+
+  geom_vline(xintercept=mean(lambda.boot$lambda,na.rm=T))+
+  geom_vline(xintercept=median(lambda.boot$lambda, na.rm=T),color="blue")+
+  geom_vline(xintercept=quantile(lambda.boot$lambda,p=0.025,na.rm=T), color="red")+
+  geom_vline(xintercept=quantile(lambda.boot$lambda,p=0.975,na.rm=T), color="red")+
+  geom_vline(xintercept=lambda.orig, color="green")
