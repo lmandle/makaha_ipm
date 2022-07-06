@@ -413,7 +413,7 @@ lambda.orig<-eigen.analysis(bigmat(400, pvec=p.vec))$lambda1 #you can change sit
 ### Bootstrap lambda (code adapted from Kuss et al. 2008)
 #########################################################
 
-n.boot=1100 #Kuss used 5000
+n.boot=1000 #Kuss used 5000; alahee re-sampling gives false convergence warnings, but no problem with eigen.analysis
 lambda.boot=data.frame(lambda=rep(NA,n.boot))#collect lambdas
 p.vec.boot<-array(0,c(n.boot,4,ncoef,nstate))#save p.vecs, state is adult or seedling
 
@@ -480,7 +480,7 @@ for(b.samp in 1:n.boot){
   alahee.sg.boot<-data.frame(initial=alahee.cl.s$initial[sample.boot],
                              year=alahee.cl.s$year[sample.boot],
                              survival=alahee.cl.s$survival[sample.boot])
-  mod5.boot<-update(mod5, data=alahee.sg.boot) #will get false convergence warning when 100% survival
+  mod5.boot<-update(mod5, data=alahee.sg.boot) #will get false convergence warning when 100% survival in bootstrapped sample
   s1c.boot<-fixef(mod5.boot)
   
   #rebuild p.vec from bootstrapped params
