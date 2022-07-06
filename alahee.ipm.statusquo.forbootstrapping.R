@@ -413,7 +413,7 @@ lambda.orig<-eigen.analysis(bigmat(400, pvec=p.vec))$lambda1 #you can change sit
 ### Bootstrap lambda (code adapted from Kuss et al. 2008)
 #########################################################
 
-n.boot=50 #Kuss used 5000
+n.boot=1100 #Kuss used 5000
 lambda.boot=data.frame(lambda=rep(NA,n.boot))#collect lambdas
 p.vec.boot<-array(0,c(n.boot,4,ncoef,nstate))#save p.vecs, state is adult or seedling
 
@@ -492,7 +492,7 @@ for(b.samp in 1:n.boot){
   p.vec.boot[b.samp,3,2,1]<-f1.boot[2]#slope for fecundity for adults 
   p.vec.boot[b.samp,1,1,2]<-s1s.boot$cond[1]#intercept
   p.vec.boot[b.samp,1,2,2]<-s1s.boot$cond[2]##slope for sdlg survival
-  p.vec.boot[b.samp,1,1,3]<-s1c.boot$cond[1]#intercept clones
+  p.vec.boot[b.samp,1,1,3]<-s1c.boot$cond[1]#intercept clones survival
   p.vec.boot[b.samp,1,2,3]<-s1c.boot$cond[2]##slope for clones survival
   p.vec.boot[b.samp,2,1,2]<-g1s.boot$cond[1]# intercept for growth for seedlings 
   p.vec.boot[b.samp,2,2,2]<-g1s.boot$cond[2]#slope for growth for seedlings
@@ -510,7 +510,6 @@ for(b.samp in 1:n.boot){
   p.vec.boot[b.samp,4,7,1]<-log(25.5) #scd MEAN size class distribution
   p.vec.boot[b.samp,4,8,1]<-log(2.5) #standard deviation size class distribution
   
- 
   #bootstrapped lambda
   lambda.boot$lambda[b.samp]<-tryCatch(
     expr=eigen.analysis(bigmat(400, pvec=p.vec.boot[b.samp,,,]))$lambda1,
@@ -524,7 +523,7 @@ for(b.samp in 1:n.boot){
 
 date = gsub(":","-",Sys.time()) #get date and time to append to filename  
 date = gsub(" ","_",date)
-write.csv(lambda.boot, file=paste0("olopua.lambda.boot", "_", date, ".csv"))
+write.csv(lambda.boot, file=paste0("alahee.lambda.boot", "_", date, ".csv"))
 
 ci.normal.app=c(mean(lambda.boot$lambda)-1.96*sd(lambda.boot$lambda),mean(lambda.boot$lambda)+1.96*sd(lambda.boot$lambda))
 res=c(mean(lambda.boot$lambda,na.rm=T),quantile(lambda.boot$lambda,p=c(0.025,0.5,0.975),na.rm=T),ci.normal.app)
