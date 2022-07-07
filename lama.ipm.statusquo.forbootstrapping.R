@@ -379,8 +379,8 @@ for(b.samp in 1:n.boot){
   lama.fec.boot<-data.frame(fruit=lama.fec$fruit[sample.boot],
                             dbh=lama.fec$dbh[sample.boot],
                             tag=lama.fec$tag[sample.boot])
-  mod3.boot<-update(mod3, data=lama.fec.boot)
-  f1.boot<-fixef(mod3.boot)
+  mod3.boot<-glm(log(fruit)~log(dbh), data=lama.fec.boot) #remove individual-level random effect
+  f1.boot<-coef(mod3.boot)
 
   #Seedling survival
   sample.boot=c(sample(1:nrow(lama.surv34),replace=T))
@@ -397,8 +397,8 @@ for(b.samp in 1:n.boot){
   p.vec.boot[2,1,1]<-g1a.boot$cond[1]#intercept for growth for adults  
   p.vec.boot[2,2,1]<-g1a.boot$cond[2]#slope for growth for adults 
   p.vec.boot[2,4,1]<-g.sig2a.boot#g.sigma2 overall variation
-  p.vec.boot[3,1,1]<-f1.boot$cond[1]#intercept
-  p.vec.boot[3,2,1]<-f1.boot$cond[2]#slope for fecundity for adults 
+  p.vec.boot[3,1,1]<-f1.boot[1]#intercept
+  p.vec.boot[3,2,1]<-f1.boot[2]#slope for fecundity for adults 
   p.vec.boot[1,1,2]<-s1s.boot$cond[1]#intercept
   p.vec.boot[1,2,2]<-s1s.boot$cond[2]#slope for sdlg survival
   p.vec.boot[2,1,2]<- g1s.boot$cond[1]# intercept for growth for seedlings 
