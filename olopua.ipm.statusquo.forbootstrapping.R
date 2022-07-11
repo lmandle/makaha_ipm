@@ -389,7 +389,6 @@ for(b.samp in 1:n.boot){
   v.fec.boot<-data.frame(viable.fruit=v.fec$viable.fruit[sample.boot],
                             dbh=v.fec$dbh[sample.boot],
                             tree=v.fec$tree[sample.boot])
-  #mod3e.boot<-update(mod3e, data=v.fec.boot)
   mod3e.boot<-glm(log(viable.fruit)~log(dbh)+I(log(dbh)^2),data=v.fec.boot) #remove tree random eff for bootstrapping
   f1.boot<-coef(mod3e.boot)
   
@@ -398,8 +397,7 @@ for(b.samp in 1:n.boot){
   olopua.sdlg.s.boot<-data.frame(survival=sdlg.h$survival[sample.boot],
                                initial=sdlg.h$initial[sample.boot],
                                tag=sdlg.h$tag[sample.boot])
-  #s4.h.boot<-update(s4.h, data=olopua.sdlg.s.boot) #fitting problems depending on resampling, b/c of tag being a factor
-  s4.h.boot<-glm(survival~log(initial),family="binomial", data=olopua.sdlg.s.boot) #drop tag from random effect?
+  s4.h.boot<-glm(survival~log(initial),family="binomial", data=olopua.sdlg.s.boot) #drop tag from random effect, refit as fixed effects model
   s1s.boot<-coef(s4.h.boot)
   
   #rebuild p.vec from bootstrapped params
@@ -411,7 +409,7 @@ for(b.samp in 1:n.boot){
   p.vec.boot[b.samp,3,1,1]<-f1.boot[1]#intercept for fecundity for adults
   p.vec.boot[b.samp,3,2,1]<-f1.boot[2]#slope for fecundity for adults 
   p.vec.boot[b.samp,3,3,1]<-f1.boot[3]#quadratic term
-  p.vec.boot[b.samp,1,1,2]<-s1s.boot[1]#intercept
+  p.vec.boot[b.samp,1,1,2]<-s1s.boot[1]#intercept for sdlg survival
   p.vec.boot[b.samp,1,2,2]<-s1s.boot[2]#slope for sdlg survival
   p.vec.boot[b.samp,2,1,2]<-g1s.boot[1]# intercept for growth for seedlings 
   p.vec.boot[b.samp,2,2,2]<-g1s.boot[2]#slope for growth for seedlings
