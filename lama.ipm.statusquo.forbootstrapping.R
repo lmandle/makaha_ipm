@@ -343,8 +343,8 @@ lambda.orig<-eigen.analysis(bigmat(400, pvec=p.vec))$lambda1
 #########################################################
 
 n.boot=1000 #Kuss used 5000
-lambda.boot=data.frame(lambda=rep(NA,n.boot))#just want to collect lambdas
-
+nscenarios=4 #1)Status quo; 2)Reduce seed pred; 3)Reduce weed cover; 4)Reduce seed pre and weed cover.
+lambda.boot=array(NA,c(nscenarios,n.boot))
 for(b.samp in 1:n.boot){
   
   #Adult survival
@@ -365,14 +365,28 @@ for(b.samp in 1:n.boot){
   g1a.boot<-fixef(mod1.boot)
   g.sig2a.boot<-summary(mod1.boot)$sigma^2 
   
-  #Seedling growth
+  #Seedling growth: status quo and reduced seed pred
   sample.boot=c(sample(1:nrow(lama.sg3),replace=T))
   lama.sg3.boot<-data.frame(initial=lama.sg3$initial[sample.boot],
                             final.c=lama.sg3$final.c[sample.boot],
                             year=lama.sg3$year[sample.boot])
   mod2a.3.boot<-update(mod2a.3, data=lama.sg3.boot)
   g1s.boot<-fixef(mod2a.3.boot)
-  g.sig2s.boot<-summary(mod2a.3.boot)$sigma^2 	
+  g.sig2s.boot<-summary(mod2a.3.boot)$sigma^2
+  
+  #Seedling growth: reduced weed cover and combined reduced weed cover and seed pred
+  lama.sg.subset<-data.frame(initial=lama.sg$initial,
+                            final.sim=lama.sg$final.sim,
+                            year=lama.sg$year)
+  lama.sg.subset<- lama.sg.subset[complete.cases(lama.sg.subset),] #only keep complete cases to avoid bootstrapping NAs
+  sample.boot=c(sample(1:nrow(lama.sg.subset),replace=T))
+  lama.sg.boot<-data.frame(initial=lama.sg.subset$initial[sample.boot],
+                                                 final.sim=lama.sg.subset$final.sim[sample.boot],
+                                                 year=lama.sg.subset$year[sample.boot])
+  mod2s.boot<-glmmTMB(log(final.sim)~log(initial)+(1|year), data=lama.sg.boot)
+  g1ssim.boot<-fixef(mod2s.boot)
+  g.sig2ssim.boot<-summary(mod2s.boot)$sigma^2 
+  
   
   #Fecundity
   sample.boot=c(sample(1:nrow(lama.fec),replace=T))
@@ -391,36 +405,53 @@ for(b.samp in 1:n.boot){
   s1s.boot<-fixef(mod4b.boot)
   
   #rebuild p.vec from bootstrapped params
-  p.vec.boot<-array(0,c(3,ncoef,nstate))#state is adult or seedling
+  p.vec.boot<-array(0,c(nscenarios,3,ncoef,nstate))#state is adult or seedling
   
-  p.vec.boot[1,1,1]<-surv.int.boot
-  p.vec.boot[2,1,1]<-g1a.boot$cond[1]#intercept for growth for adults  
-  p.vec.boot[2,2,1]<-g1a.boot$cond[2]#slope for growth for adults 
-  p.vec.boot[2,4,1]<-g.sig2a.boot#g.sigma2 overall variation
-  p.vec.boot[3,1,1]<-f1.boot[1]#intercept
-  p.vec.boot[3,2,1]<-f1.boot[2]#slope for fecundity for adults 
-  p.vec.boot[1,1,2]<-s1s.boot$cond[1]#intercept
-  p.vec.boot[1,2,2]<-s1s.boot$cond[2]#slope for sdlg survival
-  p.vec.boot[2,1,2]<- g1s.boot$cond[1]# intercept for growth for seedlings 
-  p.vec.boot[2,2,2]<- g1s.boot$cond[2]#slope for growth for seedlings
-  p.vec.boot[2,4,2]<-g.sig2s.boot 
+  #params constant across scenarios
+  p.vec.boot[,1,1,1]<-surv.int.boot
+  p.vec.boot[,2,1,1]<-g1a.boot$cond[1]#intercept for growth for adults  
+  p.vec.boot[,2,2,1]<-g1a.boot$cond[2]#slope for growth for adults 
+  p.vec.boot[,2,4,1]<-g.sig2a.boot#g.sigma2 overall variation
+  p.vec.boot[,3,1,1]<-f1.boot[1]#intercept
+  p.vec.boot[,3,2,1]<-f1.boot[2]#slope for fecundity for adults 
+  p.vec.boot[,1,1,2]<-s1s.boot$cond[1]#intercept
+  p.vec.boot[,1,2,2]<-s1s.boot$cond[2]#slope for sdlg survival
+  p.vec.boot[,3,7,1]<-log(5.4) #scd MEAN size class distribution
+  p.vec.boot[,3,8,1]<-1.57 #standard deviation of log of size class distribution
   
-  #fixed params:
-  p.vec.boot[3,6,1]<-(1-0.89)*0.64*0.31#prob of pred*germ *survival open, whole, all cover
-  p.vec.boot[3,7,1]<-log(5.4) #scd MEAN size class distribution
-  p.vec.boot[3,8,1]<-1.57 #standard deviation of log of size class distribution
+  #seedling growth params vary by scenario
+  #seedling growth under status quo and reduced seed predation
+  p.vec.boot[c(1,2),2,1,2]<- g1s.boot$cond[1]# intercept for growth for seedlings 
+  p.vec.boot[c(1,2),2,2,2]<- g1s.boot$cond[2]#slope for growth for seedlings
+  p.vec.boot[c(1,2),2,4,2]<-g.sig2s.boot
   
-  #bootstrapped lambda
-  lambda.boot$lambda[b.samp]<-tryCatch(
-    expr=eigen.analysis(bigmat(400, pvec=p.vec.boot))$lambda1,
+  #seedling growth under reduced weed cover and combined reduced weed cover/seed pred scenario
+  p.vec.boot[c(3,4),2,1,2]<- g1ssim.boot$cond[1]# intercept for growth for seedlings 
+  p.vec.boot[c(3,4),2,2,2]<- g1ssim.boot$cond[2]#slope for growth for seedlings
+  p.vec.boot[c(3,4),2,4,2]<-g.sig2ssim.boot
+  
+  
+  #seedling survival varies by scenario
+  p.vec.boot[1,3,6,1]<-(1-0.89)*0.64*0.31#prob of pred*germ *survival open, whole, all cover
+  p.vec.boot[2,3,6,1]<-(1-0)*0.64*0.31 #Reduce seed predators only
+  p.vec.boot[3,3,6,1]<-(1-0.85)*0.82*0.36#Reduce weed cover only; prob of pred*germ *survival open, whole, 20% cover
+  p.vec.boot[4,3,6,1]<-1*0.82*0.36 #Reduce seed pred and weed cover
+
+  
+  #calculated bootstrapped lambda across all scenarios
+  for(i in 1:nscenarios){ 
+  lambda.boot[i,b.samp]<-tryCatch(
+    expr=eigen.analysis(bigmat(400, pvec=p.vec.boot[i,,,]))$lambda1,
     error=function(cond){
       message(cond)
       return(NA)},
     warning=function(cond){
       message(cond)
       return(NULL)})
+  }
 }
 
+#need to updated to handle lambda boot as array and exporting values
 date = gsub(":","-",Sys.time()) #get date and time to append to filename  
 date = gsub(" ","_",date)
 write.csv(lambda.boot, file=paste0("lama.lambda.boot", "_", date, ".csv"))
