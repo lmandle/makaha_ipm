@@ -13,6 +13,7 @@ library(lattice)
 library(glmmTMB)
 library(MuMIn)
 library(ggplot2)
+library(tidyverse) #for summarizing results of simulations by scenario
 
 ### Vital rate models *******************
 
@@ -451,18 +452,32 @@ for(b.samp in 1:n.boot){
   }
 }
 
-#need to updated to handle lambda boot as array and exporting values
+#convert lambda.boot array to dataframe
+lambda.boot.df<-data.frame(scenario=rep(c(1:nscenarios), each=n.boot),
+                           rep=rep(c(1:n.boot), teams=nscenarios),
+                           lambda=as.vector(t(lambda.boot))) #turns lambda.boot lambda values into a vector, ordered by scenario
+
 date = gsub(":","-",Sys.time()) #get date and time to append to filename  
 date = gsub(" ","_",date)
-write.csv(lambda.boot, file=paste0("lama.lambda.boot", "_", date, ".csv"))
+write.csv(lambda.boot.df, file=paste0("lama.lambda.boot", "_", date, ".csv"))
 
+#need to update to handle dataframe format for lambda.boot.df
 ci.normal.app=c(mean(lambda.boot$lambda)-1.96*sd(lambda.boot$lambda),mean(lambda.boot$lambda)+1.96*sd(lambda.boot$lambda))
 res=c(mean(lambda.boot$lambda,na.rm=T),quantile(lambda.boot$lambda,p=c(0.025,0.5,0.975),na.rm=T),ci.normal.app)
 
-ggplot(data=lambda.boot, aes(lambda))+  
+library(tidyverse)
+
+lambda.summary <- lambda.boot.df %>%
+  group_by(scenario) %>%
+  summarize(mean_l = mean(lambda, na.rm=T), median_l=median(lambda,na.rm=T),
+            lower_95ci=quantile(lambda, p=0.025, na.rm=T), 
+            upper_95ci=quantile(lambda, p=0.975, na.rm=T))
+
+ggplot(data=lambda.boot.df, aes(lambda))+  
   geom_histogram(bins=50)+
-  geom_vline(xintercept=mean(lambda.boot$lambda,na.rm=T))+
-  geom_vline(xintercept=median(lambda.boot$lambda, na.rm=T),color="blue")+
-  geom_vline(xintercept=quantile(lambda.boot$lambda,p=0.025,na.rm=T), color="red")+
-  geom_vline(xintercept=quantile(lambda.boot$lambda,p=0.975,na.rm=T), color="red")+
-  geom_vline(xintercept=lambda.orig, color="green")
+  facet_grid(cols=vars(scenario))+
+  geom_vline(data  = lambda.summary, aes(xintercept = mean_l), color = "green")+
+  geom_vline(data  = lambda.summary, aes(xintercept = median_l), color = "blue")+
+  geom_vline(data  = lambda.summary, aes(xintercept = lower_95ci), color = "red")+
+  geom_vline(data  = lambda.summary, aes(xintercept = upper_95ci), color = "red")
+  
