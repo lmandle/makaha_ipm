@@ -461,12 +461,6 @@ date = gsub(":","-",Sys.time()) #get date and time to append to filename
 date = gsub(" ","_",date)
 write.csv(lambda.boot.df, file=paste0("lama.lambda.boot", "_", date, ".csv"))
 
-#need to update to handle dataframe format for lambda.boot.df
-ci.normal.app=c(mean(lambda.boot$lambda)-1.96*sd(lambda.boot$lambda),mean(lambda.boot$lambda)+1.96*sd(lambda.boot$lambda))
-res=c(mean(lambda.boot$lambda,na.rm=T),quantile(lambda.boot$lambda,p=c(0.025,0.5,0.975),na.rm=T),ci.normal.app)
-
-library(tidyverse)
-
 lambda.summary <- lambda.boot.df %>%
   group_by(scenario) %>%
   summarize(mean_l = mean(lambda, na.rm=T), median_l=median(lambda,na.rm=T),
