@@ -388,7 +388,6 @@ for(b.samp in 1:n.boot){
   g1ssim.boot<-fixef(mod2s.boot)
   g.sig2ssim.boot<-summary(mod2s.boot)$sigma^2 
   
-  
   #Fecundity
   sample.boot=c(sample(1:nrow(lama.fec),replace=T))
   lama.fec.boot<-data.frame(fruit=lama.fec$fruit[sample.boot],
@@ -431,7 +430,6 @@ for(b.samp in 1:n.boot){
   p.vec.boot[c(3,4),2,2,2]<- g1ssim.boot$cond[2]#slope for growth for seedlings
   p.vec.boot[c(3,4),2,4,2]<-g.sig2ssim.boot
   
-  
   #seedling survival varies by scenario
   p.vec.boot[1,3,6,1]<-(1-0.89)*0.64*0.31#prob of pred*germ *survival open, whole, all cover
   p.vec.boot[2,3,6,1]<-(1-0)*0.64*0.31 #Reduce seed predators only
@@ -439,7 +437,7 @@ for(b.samp in 1:n.boot){
   p.vec.boot[4,3,6,1]<-1*0.82*0.36 #Reduce seed pred and weed cover
 
   
-  #calculated bootstrapped lambda across all scenarios
+  #calculate bootstrapped lambda across all scenarios
   for(i in 1:nscenarios){ 
   lambda.boot[i,b.samp]<-tryCatch(
     expr=eigen.analysis(bigmat(400, pvec=p.vec.boot[i,,,]))$lambda1,

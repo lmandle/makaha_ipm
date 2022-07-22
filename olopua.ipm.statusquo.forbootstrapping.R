@@ -13,6 +13,7 @@ library(gridBase)
 library(lattice)
 library(glmmTMB)
 library(ggplot2)
+library(tidyverse) #for summarizing results of simulations by scenario
 
 
 ### Vital rate models *******************
@@ -346,9 +347,9 @@ lambda.orig<-eigen.analysis(bigmat(400, pvec=p.vec))$lambda1 #you can change sit
 ### Bootstrap lambda (code adapted from Kuss et al. 2008)
 #########################################################
 
-n.boot=1100 #Kuss used 5000
-lambda.boot=data.frame(lambda=rep(NA,n.boot))#collect lambdas
-p.vec.boot<-array(0,c(n.boot,3,ncoef,nstate))#save p.vecs, state is adult or seedling
+n.boot=1100 #use 1100 to get at least 1000 successful re-samples and IPM runs
+nscenarios=4 #1)Status quo; 2)Reduce seed pred; 3)Reduce weed cover; 4)Reduce seed pre and weed cover.
+lambda.boot=array(NA,c(nscenarios,n.boot))
 
 for(b.samp in 1:n.boot){
   
@@ -370,7 +371,7 @@ for(b.samp in 1:n.boot){
   g1a.boot<-fixef(mod1.boot)
   g.sig2a.boot<-summary(mod1.boot)$sigma^2 
   
-  #Seedling growth
+  #Seedling growth: Status quo and reduced seed pred
   sdlg.h.subset<-data.frame(initial=sdlg.h$initial,
                             final=sdlg.h$final,
                             tag=sdlg.h$tag)
@@ -379,18 +380,40 @@ for(b.samp in 1:n.boot){
   olopua.sdlg.g.boot<-data.frame(initial=sdlg.h$initial[sample.boot],
                             final=sdlg.h$final[sample.boot],
                             tag=sdlg.h$tag[sample.boot])
-  #g3.sq.boot<-update(g3.sq, data=olopua.sdlg.g.boot)
   g3.sq.boot<-glm(log(final)~log(initial), data=olopua.sdlg.g.boot) #remove individual-level random effect from bootstrapped model
   g1s.boot<-coef(g3.sq.boot)
-  g.sig2s.boot<-summary(g3.sq.boot)$dispersion	
+  g.sig2s.boot<-summary(g3.sq.boot)$dispersion
   
-  #Fecundity
+  #Seedling growth: Reduced weed cover, and reduced seed pred and weed cover 
+  grow.subset<-data.frame(final.sim=grow$final.sim,
+                          initial=grow$initial,
+                          tag=grow$tag)
+  grow.subset<-grow.subset[complete.cases(grow.subset),]#remove 4 rows with NA for final.sim b/c didn't survive?
+  sample.boot=c(sample(1:nrow(grow.subset),replace=T))
+  olopua.sdlg.g.sim.boot<-data.frame(initial=grow.subset$initial[sample.boot],
+                                 final.sim=grow.subset$final.sim[sample.boot],
+                                 tag=grow.subset$tag[sample.boot])
+  g3.h.boot<-glm(log(final.sim)~log(initial), data=olopua.sdlg.g.sim.boot)
+  g1s.sim.boot<-coef(g3.h.boot)
+  g.sig2s.sim.boot<-summary(g3.h.boot)$dispersion 
+  
+  
+  #Fecundity: status quo and reduced weed cover
   sample.boot=c(sample(1:nrow(v.fec),replace=T))
   v.fec.boot<-data.frame(viable.fruit=v.fec$viable.fruit[sample.boot],
                             dbh=v.fec$dbh[sample.boot],
                             tree=v.fec$tree[sample.boot])
   mod3e.boot<-glm(log(viable.fruit)~log(dbh)+I(log(dbh)^2),data=v.fec.boot) #remove tree random eff for bootstrapping
   f1.boot<-coef(mod3e.boot)
+  
+  #Fecundity: reduced seed pred and reduced seed pred and weed cover
+  v.fec.rp<-subset(olopua.fec, viable.fruit.89>0)
+  sample.boot=c(sample(1:nrow(v.fec.rp),replace=T))
+  v.fec.rp.boot<-data.frame(viable.fruit.89=v.fec.rp$viable.fruit.89[sample.boot],
+                         dbh=v.fec.rp$dbh[sample.boot],
+                         tree=v.fec.rp$tree[sample.boot])
+  mod3e.rp.boot<-glm(log(viable.fruit.89)~log(dbh)+I(log(dbh)^2),data=v.fec.rp.boot) #no tree random eff for bootstrapping
+  f1.rp.boot<-coef(mod3e.rp.boot)
   
   #Seedling survival
   sample.boot=c(sample(1:nrow(sdlg.h),replace=T))
@@ -401,48 +424,85 @@ for(b.samp in 1:n.boot){
   s1s.boot<-coef(s4.h.boot)
   
   #rebuild p.vec from bootstrapped params
+  p.vec.boot<-array(0,c(nscenarios,3,ncoef,nstate))#state is adult or seedling
 
-  p.vec.boot[b.samp,1,1,1]<-surv.int.boot #intercept for survival for adults, slope is zero. 
-  p.vec.boot[b.samp,2,1,1]<-g1a.boot$cond[1]#intercept for growth for adults  
-  p.vec.boot[b.samp,2,2,1]<-g1a.boot$cond[2]#slope for growth for adults 
-  p.vec.boot[b.samp,2,4,1]<-g.sig2a.boot#g.sigma2 overall variation
-  p.vec.boot[b.samp,3,1,1]<-f1.boot[1]#intercept for fecundity for adults
-  p.vec.boot[b.samp,3,2,1]<-f1.boot[2]#slope for fecundity for adults 
-  p.vec.boot[b.samp,3,3,1]<-f1.boot[3]#quadratic term
-  p.vec.boot[b.samp,1,1,2]<-s1s.boot[1]#intercept for sdlg survival
-  p.vec.boot[b.samp,1,2,2]<-s1s.boot[2]#slope for sdlg survival
-  p.vec.boot[b.samp,2,1,2]<-g1s.boot[1]# intercept for growth for seedlings 
-  p.vec.boot[b.samp,2,2,2]<-g1s.boot[2]#slope for growth for seedlings
-  p.vec.boot[b.samp,2,4,2]<-g.sig2s.boot
- 
-  #fixed
-  p.vec.boot[b.samp,3,6,1]<-(1-0.4)*0.64*0.5 #(1-prob ground pred)*%germ*%surv to 6 months
-  p.vec.boot[b.samp,3,7,1]<-log(7.6) #scd MEAN size class distribution
-  p.vec.boot[b.samp,3,8,1]<-log(3.2) #standard deviation size class distribution
+  #params constant across scenarios
+  p.vec.boot[,1,1,1]<-surv.int.boot #intercept for survival for adults, slope is zero. 
+  p.vec.boot[,2,1,1]<-g1a.boot$cond[1]#intercept for growth for adults  
+  p.vec.boot[,2,2,1]<-g1a.boot$cond[2]#slope for growth for adults 
+  p.vec.boot[,2,4,1]<-g.sig2a.boot#g.sigma2 overall variation
+  p.vec.boot[,3,1,1]<-f1.boot[1]#intercept for fecundity for adults
+  p.vec.boot[,3,2,1]<-f1.boot[2]#slope for fecundity for adults 
+  p.vec.boot[,3,3,1]<-f1.boot[3]#quadratic term
+  p.vec.boot[,1,1,2]<-s1s.boot[1]#intercept for sdlg survival
+  p.vec.boot[,1,2,2]<-s1s.boot[2]#slope for sdlg survival
+
+  p.vec.boot[,3,7,1]<-log(7.6) #scd MEAN size class distribution
+  p.vec.boot[,3,8,1]<-log(3.2) #standard deviation size class distribution
   
-  #bootstrapped lambda
-  lambda.boot$lambda[b.samp]<-tryCatch(
-    expr=eigen.analysis(bigmat(400, pvec=p.vec.boot[b.samp,,,]))$lambda1,
-    error=function(cond){
-      message(cond)
-      return(NA)},
-   warning=function(cond){
-     message(cond)
-     return(NULL)})
+  #seedling growth varies by scenario
+  #status quo and reduced seed pred
+  p.vec.boot[c(1,2),2,1,2]<-g1s.boot[1]# intercept for growth for seedlings 
+  p.vec.boot[c(1,2),2,2,2]<-g1s.boot[2]#slope for growth for seedlings
+  p.vec.boot[c(1,2),2,4,2]<-g.sig2s.boot
+  
+  #reduced weed cover, and reduced seed pred and weed cover
+  p.vec.boot[c(3,4),2,1,2]<-g1s.sim.boot[1]# intercept for growth for seedlings 
+  p.vec.boot[c(3,4),2,2,2]<-g1s.sim.boot[2]#slope for growth for seedlings
+  p.vec.boot[c(3,4),2,4,2]<-g.sig2s.sim.boot
+
+  #fecundity varies by scenario
+  #fecundity for status quo and reduced weed cover
+  p.vec.boot[c(1,3),3,1,1]<-f1.boot[1]#intercept for fecundity for adults
+  p.vec.boot[c(1,3),3,2,1]<-f1.boot[2]#slope for fecundity for adults 
+  p.vec.boot[c(1,3),3,3,1]<-f1.boot[3]#quadratic term
+  
+  #fecundity for reduced seed pred, and reduced seed pred and weed cover
+  p.vec.boot[c(2,4),3,1,1]<-f1.rp.boot[1]#intercept for fecundity for adults
+  p.vec.boot[c(2,4),3,2,1]<-f1.rp.boot[2]#slope for fecundity for adults 
+  p.vec.boot[c(2,4),3,3,1]<-f1.rp.boot[3]#quadratic term
+  
+  #seedling survival varies by scenario
+  p.vec.boot[1,3,6,1]<-(1-0.4)*0.64*0.5 #(1-prob ground pred)*%germ*%surv to 6 months; status quo
+  p.vec.boot[2,3,6,1]<-(1-0)*0.64*0.5 #reduced seed pred
+  p.vec.boot[3,3,6,1]<-(1-0.4)*0.82*0.58 #reduced weed cover
+  p.vec.boot[4,3,6,1]<-(1-0)*0.82*0.58 #reduced seed pred and weed cover
+
+  
+  #calculate bootstrapped lambda across all scenarios
+  for(i in 1:nscenarios){ 
+    lambda.boot[i,b.samp]<-tryCatch(
+      expr=eigen.analysis(bigmat(400, pvec=p.vec.boot[i,,,]))$lambda1,
+      error=function(cond){
+        message(cond)
+        return(NA)},
+      warning=function(cond){
+        message(cond)
+        return(NULL)})
+  }
 }
+
+#convert lambda.boot array to dataframe
+lambda.boot.df<-data.frame(scenario=rep(c(1:nscenarios), each=n.boot),
+                           rep=rep(c(1:n.boot), teams=nscenarios),
+                           lambda=as.vector(t(lambda.boot))) #turns lambda.boot lambda values into a vector, ordered by scenario
 
 date = gsub(":","-",Sys.time()) #get date and time to append to filename  
 date = gsub(" ","_",date)
 write.csv(lambda.boot, file=paste0("olopua.lambda.boot", "_", date, ".csv"))
 
-ci.normal.app=c(mean(lambda.boot$lambda)-1.96*sd(lambda.boot$lambda),mean(lambda.boot$lambda)+1.96*sd(lambda.boot$lambda))
-res=c(mean(lambda.boot$lambda,na.rm=T),quantile(lambda.boot$lambda,p=c(0.025,0.5,0.975),na.rm=T),ci.normal.app)
+lambda.summary <- lambda.boot.df %>%
+  group_by(scenario) %>%
+  summarize(mean_l = mean(lambda, na.rm=T), median_l=median(lambda,na.rm=T),
+            lower_95ci=quantile(lambda, p=0.025, na.rm=T), 
+            upper_95ci=quantile(lambda, p=0.975, na.rm=T))
 
-ggplot(data=lambda.boot, aes(lambda))+  
+ggplot(data=lambda.boot.df, aes(lambda))+  
   geom_histogram(bins=50)+
-  geom_vline(xintercept=mean(lambda.boot$lambda,na.rm=T))+
-  geom_vline(xintercept=median(lambda.boot$lambda, na.rm=T),color="blue")+
-  geom_vline(xintercept=quantile(lambda.boot$lambda,p=0.025,na.rm=T), color="red")+
-  geom_vline(xintercept=quantile(lambda.boot$lambda,p=0.975,na.rm=T), color="red")+
-  geom_vline(xintercept=lambda.orig, color="green")
+  facet_grid(cols=vars(scenario))+
+  geom_vline(data  = lambda.summary, aes(xintercept = mean_l), color = "green")+
+  geom_vline(data  = lambda.summary, aes(xintercept = median_l), color = "blue")+
+  geom_vline(data  = lambda.summary, aes(xintercept = lower_95ci), color = "red")+
+  geom_vline(data  = lambda.summary, aes(xintercept = upper_95ci), color = "red")
+
 
