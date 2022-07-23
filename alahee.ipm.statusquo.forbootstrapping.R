@@ -13,6 +13,8 @@ library(lattice)
 library(glmmTMB)
 library(MuMIn)
 library(ggplot2)
+library(tidyverse) #for summarizing results of simulations by scenario
+
 ##### Vital Rate Regressions *******************
 
 ####Survival adults
@@ -413,9 +415,9 @@ lambda.orig<-eigen.analysis(bigmat(400, pvec=p.vec))$lambda1 #you can change sit
 ### Bootstrap lambda (code adapted from Kuss et al. 2008)
 #########################################################
 
-n.boot=1000 #Kuss used 5000; alahee re-sampling gives false convergence warnings, but no problem with eigen.analysis
-lambda.boot=data.frame(lambda=rep(NA,n.boot))#collect lambdas
-p.vec.boot<-array(0,c(n.boot,4,ncoef,nstate))#save p.vecs, state is adult or seedling
+n.boot=10 #Kuss used 5000; alahee re-sampling gives false convergence warnings, but no problem with eigen.analysis
+nscenarios=5 #1)Status quo; 2)Reduce seed pred; 3)Reduce weed cover; 4)Reduce seed pred and weed cover; 5) Moth control on top of rat seed pred and weed cover
+lambda.boot=array(NA,c(nscenarios,n.boot))
 
 for(b.samp in 1:n.boot){
   
@@ -447,8 +449,7 @@ for(b.samp in 1:n.boot){
                                  site=alahee.sg$site[sample.boot])
   g2s.boot<-update(g2s, data=alahee.sdlg.g.boot)
   g1s.boot<-fixef(g2s.boot)
-  g.sig2s.boot<-summary(g2s.boot)$sigma^2 
-
+  g.sig2s.boot<-summary(g2s.boot)$sigma^2
   
   #Fecundity
   sample.boot=c(sample(1:nrow(fec),replace=T))
@@ -458,14 +459,21 @@ for(b.samp in 1:n.boot){
   mod3b.boot<-glm(log(fruit)~log(dbh),data=fec.boot)#refit without individual-level random effects
   f1.boot<-coef(mod3b.boot)
   
-  #Seedling survival
+  #Seedling survival: status quo and reduced seed pred
   sample.boot=c(sample(1:nrow(alahee.s),replace=T))
   alahee.sdlg.s.boot<-data.frame(survival=alahee.s$survival[sample.boot],
+                                 survival.sim=alahee.s$survival.sim[sample.boot],
                                  initial=alahee.s$initial[sample.boot],
                                  site=alahee.s$site[sample.boot])
   mod1a.boot<-update(mod1a, data=alahee.sdlg.s.boot)
   s1s.boot<-fixef(mod1a.boot)
-
+  
+  #Seedling survival: simulated weeding for reduced weed cover, reduced seed pred and weed cover, and reduced moth pred, seed pred and weed cover
+  #use the same bootstrapped sample as above, but with survival.sim
+  mod1s.sim<-glmmTMB(survival.sim~log(initial)+(1|site), family="binomial", data=alahee.sdlg.s.boot)#tried also w Site, no diffs across sites
+  s1s.sim.boot<-fixef(mod1s.sim)
+  
+  
   #Clonal growth
   sample.boot=c(sample(1:nrow(alahee.cl),replace=T))
   alahee.cg.boot<-data.frame(initial=alahee.cl$initial[sample.boot],
@@ -484,54 +492,78 @@ for(b.samp in 1:n.boot){
   s1c.boot<-fixef(mod5.boot)
   
   #rebuild p.vec from bootstrapped params
-  p.vec.boot[b.samp,1,1,1]<-surv.int.boot #intercept for survival for sizes >1 (97%), slope is zero. 
-  p.vec.boot[b.samp,2,1,1]<-g1a.boot$cond[1]#intercept for growth for adults  
-  p.vec.boot[b.samp,2,2,1]<-g1a.boot$cond[2]#slope for growth for adults 
-  p.vec.boot[b.samp,2,4,1]<-g.sig2a.boot#g.sigma2 overall variation
-  p.vec.boot[b.samp,3,1,1]<-f1.boot[1]#intercept
-  p.vec.boot[b.samp,3,2,1]<-f1.boot[2]#slope for fecundity for adults 
-  p.vec.boot[b.samp,1,1,2]<-s1s.boot$cond[1]#intercept
-  p.vec.boot[b.samp,1,2,2]<-s1s.boot$cond[2]##slope for sdlg survival
-  p.vec.boot[b.samp,1,1,3]<-s1c.boot$cond[1]#intercept clones survival
-  p.vec.boot[b.samp,1,2,3]<-s1c.boot$cond[2]##slope for clones survival
-  p.vec.boot[b.samp,2,1,2]<-g1s.boot$cond[1]# intercept for growth for seedlings 
-  p.vec.boot[b.samp,2,2,2]<-g1s.boot$cond[2]#slope for growth for seedlings
-  p.vec.boot[b.samp,2,4,2]<-g.sig2s.boot 
-  p.vec.boot[b.samp,2,1,3]<-g1c.boot[1]# intercept for growth for clones 
-  p.vec.boot[b.samp,2,2,3]<-g1c.boot[2]#slope for growth for clones
-  p.vec.boot[b.samp,2,4,3]<-g.sig2c.boot
+  p.vec.boot<-array(0,c(nscenarios,4,ncoef,nstate))#state is adult or seedling or clone
   
-  #fixed parameters
-  p.vec.boot[b.samp,3,6,1]<-(1)*(1-0.89)*0.4*0.24#average
-  p.vec.boot[b.samp,3,7,1]<-log(4) #scd MEAN size class distribution
-  p.vec.boot[b.samp,3,8,1]<-log(2) #standard deviation size class distribution
-  p.vec.boot[b.samp,4,1,1]<-1 #number of clones/tree
-  p.vec.boot[b.samp,4,2,1]<-0 #doesn't vary w size
-  p.vec.boot[b.samp,4,7,1]<-log(25.5) #scd MEAN size class distribution
-  p.vec.boot[b.samp,4,8,1]<-log(2.5) #standard deviation size class distribution
+  #params constant across scenarios
+  p.vec.boot[,1,1,1]<-surv.int.boot #intercept for survival for sizes >1 (97%), slope is zero. 
+  p.vec.boot[,2,1,1]<-g1a.boot$cond[1]#intercept for growth for adults  
+  p.vec.boot[,2,2,1]<-g1a.boot$cond[2]#slope for growth for adults 
+  p.vec.boot[,2,4,1]<-g.sig2a.boot#g.sigma2 overall variation
+  p.vec.boot[,3,1,1]<-f1.boot[1]#intercept
+  p.vec.boot[,3,2,1]<-f1.boot[2]#slope for fecundity for adults 
+  p.vec.boot[,1,1,3]<-s1c.boot$cond[1]#intercept clones survival
+  p.vec.boot[,1,2,3]<-s1c.boot$cond[2]##slope for clones survival
+  p.vec.boot[,2,1,2]<-g1s.boot$cond[1]# intercept for growth for seedlings 
+  p.vec.boot[,2,2,2]<-g1s.boot$cond[2]#slope for growth for seedlings
+  p.vec.boot[,2,4,2]<-g.sig2s.boot 
+  p.vec.boot[,2,1,3]<-g1c.boot[1]# intercept for growth for clones 
+  p.vec.boot[,2,2,3]<-g1c.boot[2]#slope for growth for clones
+  p.vec.boot[,2,4,3]<-g.sig2c.boot
+  p.vec.boot[,3,7,1]<-log(4) #scd MEAN size class distribution
+  p.vec.boot[,3,8,1]<-log(2) #standard deviation size class distribution
+  p.vec.boot[,4,1,1]<-1 #number of clones/tree
+  p.vec.boot[,4,2,1]<-0 #doesn't vary w size
+  p.vec.boot[,4,7,1]<-log(25.5) #scd MEAN size class distribution
+  p.vec.boot[,4,8,1]<-log(2.5) #standard deviation size class distribution
   
-  #bootstrapped lambda
-  lambda.boot$lambda[b.samp]<-tryCatch(
-    expr=eigen.analysis(bigmat(400, pvec=p.vec.boot[b.samp,,,]))$lambda1,
-    error=function(cond){
-      message(cond)
-      return(NA)},
-    warning=function(cond){
-      message(cond)
-      return(NULL)})
+  #seedling survival varies across scenarios
+  #seedling survival for status quo, reduced seed pred
+  p.vec.boot[c(1,2),1,1,2]<-s1s.boot$cond[1]#intercept
+  p.vec.boot[c(1,2),1,2,2]<-s1s.boot$cond[2]##slope for sdlg survival
+  
+  #seedling survival for reduced seed pred, reduced seed pred and weed cover, reduced moth and rat pred and weed cover
+  p.vec.boot[c(3:5),1,1,2]<-s1s.sim.boot$cond[1]#intercept
+  p.vec.boot[c(3:5),1,2,2]<-s1s.sim.boot$cond[2]##slope for sdlg survival
+  
+  #seed survival varies across scenarios
+  p.vec.boot[1,3,6,1]<-(1)*(1-0.89)*0.4*0.24#average
+  p.vec.boot[2,3,6,1]<-(1-0)*(0.4)*0.24#no rat predation
+  p.vec.boot[3,3,6,1]<-(1)*(1-0.85)*0.5*0.28 #reduce weed cover
+  p.vec.boot[4,3,6,1]<-(1-0)*(0.5)*0.28 #rat control and reduced weed cover
+  p.vec.boot[5,3,6,1]<-5.55*(1-0)*(0.5)*0.28 #rat and moth control and reduced weed cover
+  
+  #calculate bootstrapped lambda across all scenarios
+  for(i in 1:nscenarios){ 
+    lambda.boot[i,b.samp]<-tryCatch(
+      expr=eigen.analysis(bigmat(400, pvec=p.vec.boot[i,,,]))$lambda1,
+      error=function(cond){
+        message(cond)
+        return(NA)},
+      warning=function(cond){
+        message(cond)
+        return(NULL)})
+  }
 }
+
+#convert lambda.boot array to dataframe
+lambda.boot.df<-data.frame(scenario=rep(c(1:nscenarios), each=n.boot),
+                           rep=rep(c(1:n.boot), teams=nscenarios),
+                           lambda=as.vector(t(lambda.boot))) #turns lambda.boot lambda values into a vector, ordered by scenario
 
 date = gsub(":","-",Sys.time()) #get date and time to append to filename  
 date = gsub(" ","_",date)
-write.csv(lambda.boot, file=paste0("alahee.lambda.boot", "_", date, ".csv"))
+write.csv(lambda.boot.df, file=paste0("alahee.lambda.boot", "_", date, ".csv"))
 
-ci.normal.app=c(mean(lambda.boot$lambda)-1.96*sd(lambda.boot$lambda),mean(lambda.boot$lambda)+1.96*sd(lambda.boot$lambda))
-res=c(mean(lambda.boot$lambda,na.rm=T),quantile(lambda.boot$lambda,p=c(0.025,0.5,0.975),na.rm=T),ci.normal.app)
+lambda.summary <- lambda.boot.df %>%
+  group_by(scenario) %>%
+  summarize(mean_l = mean(lambda, na.rm=T), median_l=median(lambda,na.rm=T),
+            lower_95ci=quantile(lambda, p=0.025, na.rm=T), 
+            upper_95ci=quantile(lambda, p=0.975, na.rm=T))
 
-ggplot(data=lambda.boot, aes(lambda))+  
+ggplot(data=lambda.boot.df, aes(lambda))+  
   geom_histogram(bins=50)+
-  geom_vline(xintercept=mean(lambda.boot$lambda,na.rm=T))+
-  geom_vline(xintercept=median(lambda.boot$lambda, na.rm=T),color="blue")+
-  geom_vline(xintercept=quantile(lambda.boot$lambda,p=0.025,na.rm=T), color="red")+
-  geom_vline(xintercept=quantile(lambda.boot$lambda,p=0.975,na.rm=T), color="red")+
-  geom_vline(xintercept=lambda.orig, color="green")
+  facet_grid(cols=vars(scenario))+
+  geom_vline(data  = lambda.summary, aes(xintercept = mean_l), color = "green")+
+  geom_vline(data  = lambda.summary, aes(xintercept = median_l), color = "blue")+
+  geom_vline(data  = lambda.summary, aes(xintercept = lower_95ci), color = "red")+
+  geom_vline(data  = lambda.summary, aes(xintercept = upper_95ci), color = "red")

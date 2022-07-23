@@ -430,7 +430,7 @@ for(b.samp in 1:n.boot){
   p.vec.boot[c(3,4),2,2,2]<- g1ssim.boot$cond[2]#slope for growth for seedlings
   p.vec.boot[c(3,4),2,4,2]<-g.sig2ssim.boot
   
-  #seedling survival varies by scenario
+  #seed survival varies by scenario
   p.vec.boot[1,3,6,1]<-(1-0.89)*0.64*0.31#prob of pred*germ *survival open, whole, all cover
   p.vec.boot[2,3,6,1]<-(1-0)*0.64*0.31 #Reduce seed predators only
   p.vec.boot[3,3,6,1]<-(1-0.85)*0.82*0.36#Reduce weed cover only; prob of pred*germ *survival open, whole, 20% cover

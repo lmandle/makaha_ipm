@@ -462,7 +462,7 @@ for(b.samp in 1:n.boot){
   p.vec.boot[c(2,4),3,2,1]<-f1.rp.boot[2]#slope for fecundity for adults 
   p.vec.boot[c(2,4),3,3,1]<-f1.rp.boot[3]#quadratic term
   
-  #seedling survival varies by scenario
+  #seed survival varies by scenario
   p.vec.boot[1,3,6,1]<-(1-0.4)*0.64*0.5 #(1-prob ground pred)*%germ*%surv to 6 months; status quo
   p.vec.boot[2,3,6,1]<-(1-0)*0.64*0.5 #reduced seed pred
   p.vec.boot[3,3,6,1]<-(1-0.4)*0.82*0.58 #reduced weed cover
@@ -489,7 +489,7 @@ lambda.boot.df<-data.frame(scenario=rep(c(1:nscenarios), each=n.boot),
 
 date = gsub(":","-",Sys.time()) #get date and time to append to filename  
 date = gsub(" ","_",date)
-write.csv(lambda.boot, file=paste0("olopua.lambda.boot", "_", date, ".csv"))
+write.csv(lambda.boot.df, file=paste0("olopua.lambda.boot", "_", date, ".csv"))
 
 lambda.summary <- lambda.boot.df %>%
   group_by(scenario) %>%
