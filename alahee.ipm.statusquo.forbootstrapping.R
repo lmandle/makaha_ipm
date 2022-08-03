@@ -418,6 +418,7 @@ lambda.orig<-eigen.analysis(bigmat(400, pvec=p.vec))$lambda1 #you can change sit
 n.boot=10 #Kuss used 5000; alahee re-sampling gives false convergence warnings, but no problem with eigen.analysis
 nscenarios=5 #1)Status quo; 2)Reduce seed pred; 3)Reduce weed cover; 4)Reduce seed pred and weed cover; 5) Moth control on top of rat seed pred and weed cover
 lambda.boot=array(NA,c(nscenarios,n.boot))
+p.vec.boot.saved<-array(0,c(n.boot,nscenarios,4,ncoef,nstate))#to explore results and understand distribution of lambdas
 
 for(b.samp in 1:n.boot){
   
@@ -531,6 +532,8 @@ for(b.samp in 1:n.boot){
   p.vec.boot[3,3,6,1]<-(1)*(1-0.85)*0.5*0.28 #reduce weed cover
   p.vec.boot[4,3,6,1]<-(1-0)*(0.5)*0.28 #rat control and reduced weed cover
   p.vec.boot[5,3,6,1]<-5.55*(1-0)*(0.5)*0.28 #rat and moth control and reduced weed cover
+  
+  p.vec.boot.saved[b.samp,,,,]<-p.vec.boot
   
   #calculate bootstrapped lambda across all scenarios
   for(i in 1:nscenarios){ 
